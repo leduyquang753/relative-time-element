@@ -1,4 +1,12 @@
-import {Duration, elapsedTime, getRelativeTimeUnit, isDuration, roundToSingleUnit, Unit, unitNames} from './duration.js'
+import {
+  Duration,
+  elapsedTime,
+  relativeTime,
+  isDuration,
+  roundBalancedToSingleUnit,
+  Unit,
+  unitNames,
+} from './duration.js'
 const HTMLElement = globalThis.HTMLElement || (null as unknown as typeof window['HTMLElement'])
 
 export type DeprecatedFormat = 'auto' | 'micro' | 'elapsed'
@@ -157,7 +165,7 @@ export class RelativeTimeElement extends HTMLElement implements Intl.DateTimeFor
     const tense = this.tense
     let empty = emptyDuration
     if (format === 'micro') {
-      duration = roundToSingleUnit(duration)
+      duration = roundBalancedToSingleUnit(duration)
       empty = microEmptyDuration
       if ((this.tense === 'past' && duration.sign !== -1) || (this.tense === 'future' && duration.sign !== 1)) {
         duration = microEmptyDuration
@@ -172,15 +180,16 @@ export class RelativeTimeElement extends HTMLElement implements Intl.DateTimeFor
     return duration.abs().toLocaleString(locale, {style})
   }
 
-  #getRelativeFormat(duration: Duration): string {
+  #getRelativeFormat(date: Date): string {
     const relativeFormat = new Intl.RelativeTimeFormat(this.#lang, {
       numeric: 'auto',
       style: this.formatStyle,
     })
+    let [int, unit] = relativeTime(date, this.precision)
     const tense = this.tense
-    if (tense === 'future' && duration.sign !== 1) duration = emptyDuration
-    if (tense === 'past' && duration.sign !== -1) duration = emptyDuration
-    const [int, unit] = getRelativeTimeUnit(duration)
+    if ((tense === 'future' && int < 0) || (tense === 'past' && int > 0)) {
+      ;[int, unit] = [0, 'second']
+    }
     if (unit === 'second' && int < 10) {
       return relativeFormat.format(0, this.precision === 'millisecond' ? 'second' : this.precision)
     }
@@ -453,7 +462,7 @@ export class RelativeTimeElement extends HTMLElement implements Intl.DateTimeFor
     if (format === 'duration') {
       newText = this.#getDurationFormat(duration)
     } else if (format === 'relative') {
-      newText = this.#getRelativeFormat(duration)
+      newText = this.#getRelativeFormat(date)
     } else {
       newText = this.#getDateTimeFormat(date)
     }
