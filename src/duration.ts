@@ -119,101 +119,68 @@ export function elapsedTime(date: Date, precision: Unit = 'second', now = Date.n
   )
 }
 
+const durationRoundingThresholds = [
+  Infinity, // Year
+  11, // Month
+  28, // Day
+  21, // Hour
+  55, // Minute
+  55, // Second
+  900, // Millisecond
+]
+
 interface RoundingOpts {
   relativeTo: Date | number
 }
 
 export function roundToSingleUnit(duration: Duration, {relativeTo = Date.now()}: Partial<RoundingOpts> = {}): Duration {
-  relativeTo = new Date(relativeTo)
-  if (duration.blank) return duration
-  const sign = duration.sign
-  let years = Math.abs(duration.years)
-  let months = Math.abs(duration.months)
-  let weeks = Math.abs(duration.weeks)
-  let days = Math.abs(duration.days)
-  let hours = Math.abs(duration.hours)
-  let minutes = Math.abs(duration.minutes)
-  let seconds = Math.abs(duration.seconds)
-  let milliseconds = Math.abs(duration.milliseconds)
-
-  if (milliseconds >= 900) seconds += Math.round(milliseconds / 1000)
-  if (seconds || minutes || hours || days || weeks || months || years) {
-    milliseconds = 0
-  }
-
-  if (seconds >= 55) minutes += Math.round(seconds / 60)
-  if (minutes || hours || days || weeks || months || years) seconds = 0
-
-  if (minutes >= 55) hours += Math.round(minutes / 60)
-  if (hours || days || weeks || months || years) minutes = 0
-
-  if (days && hours >= 12) days += Math.round(hours / 24)
-  if (!days && hours >= 21) days += Math.round(hours / 24)
-  if (days || weeks || months || years) hours = 0
-
-  // Resolve calendar dates
-  const currentYear = relativeTo.getFullYear()
-  const currentMonth = relativeTo.getMonth()
-  const currentDate = relativeTo.getDate()
-  if (days >= 27 || years + months + days) {
-    const newMonthDate = new Date(relativeTo)
-    newMonthDate.setDate(1)
-    newMonthDate.setMonth(currentMonth + months * sign + 1)
-    newMonthDate.setDate(0)
-    const monthDateCorrection = Math.max(0, currentDate - newMonthDate.getDate())
-
-    const newDate = new Date(relativeTo)
-    newDate.setFullYear(currentYear + years * sign)
-    newDate.setDate(currentDate - monthDateCorrection)
-    newDate.setMonth(currentMonth + months * sign)
-    newDate.setDate(currentDate - monthDateCorrection + days * sign)
-    const yearDiff = newDate.getFullYear() - relativeTo.getFullYear()
-    const monthDiff = newDate.getMonth() - relativeTo.getMonth()
-    const daysDiff = Math.abs(Math.round((Number(newDate) - Number(relativeTo)) / 86400000)) + monthDateCorrection
-    const monthsDiff = Math.abs(yearDiff * 12 + monthDiff)
-    if (daysDiff < 27) {
-      if (days >= 6) {
-        weeks += Math.round(days / 7)
-        days = 0
-      } else {
-        days = daysDiff
-      }
-      months = years = 0
-    } else if (monthsDiff <= 11) {
-      months = monthsDiff
-      years = 0
-    } else {
-      months = 0
-      years = yearDiff * sign
-    }
-    if (months || years) days = 0
-  }
-  if (years) months = 0
-
-  if (weeks >= 4) months += Math.round(weeks / 4)
-  if (months || years) weeks = 0
-  if (days && weeks && !months && !years) {
-    weeks += Math.round(days / 7)
-    days = 0
-  }
-
-  return new Duration(
-    years * sign,
-    months * sign,
-    weeks * sign,
-    days * sign,
-    hours * sign,
-    minutes * sign,
-    seconds * sign,
-    milliseconds * sign,
+  return roundBalancedToSingleUnit(
+    // TODO: Remove the positive sign in `+relativeTo` after integrating the new `elapsedTime` implementation.
+    elapsedTime(applyDuration(new Date(relativeTo), duration), 'millisecond', +relativeTo),
   )
 }
 
-export function getRelativeTimeUnit(
-  duration: Duration,
-  opts?: Partial<RoundingOpts>,
-): [number, Intl.RelativeTimeFormatUnit] {
-  const rounded = roundToSingleUnit(duration, opts)
+export function roundBalancedToSingleUnit(duration: Duration): Duration {
+  if (duration.blank) return duration
+  const sign = duration.sign
+  const values = [
+    Math.abs(duration.years),
+    Math.abs(duration.months),
+    Math.abs(duration.days),
+    Math.abs(duration.hours),
+    Math.abs(duration.minutes),
+    Math.abs(duration.seconds),
+    Math.abs(duration.milliseconds),
+  ]
+  let biggestUnitIndex = values.findIndex(v => v > 0)
+  const roundedLowerUnit =
+    biggestUnitIndex < values.length - 1 &&
+    values[biggestUnitIndex + 1] >= durationRoundingThresholds[biggestUnitIndex + 1]
+  if (roundedLowerUnit) {
+    values[biggestUnitIndex] += 1
+  }
+  if (values[biggestUnitIndex] >= durationRoundingThresholds[biggestUnitIndex]) {
+    --biggestUnitIndex
+    values[biggestUnitIndex] = 1
+  }
+  for (let i = biggestUnitIndex + 1; i < values.length; ++i) {
+    values[i] = 0
+  }
+  if (biggestUnitIndex === 2 && values[2] >= 6) {
+    const weeks = Math.max(1, Math.floor((values[2] + (roundedLowerUnit ? 0 : 1)) / 7))
+    if (weeks < 4) {
+      return new Duration(0, 0, weeks * sign)
+    }
+    values[biggestUnitIndex] = 0
+    --biggestUnitIndex
+    values[biggestUnitIndex] = 1
+  }
+  values[biggestUnitIndex] *= sign
+  values.splice(2, 0, 0)
+  return new Duration(...values)
+}
+
+export function getRoundedRelativeTimeUnit(rounded: Duration): [number, Intl.RelativeTimeFormatUnit] {
   if (rounded.blank) return [0, 'second']
   for (const unit of unitNames) {
     if (unit === 'millisecond') continue

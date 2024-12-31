@@ -1,5 +1,12 @@
 import {assert} from '@open-wc/testing'
-import {applyDuration, Duration, elapsedTime, getRelativeTimeUnit, roundToSingleUnit} from '../src/duration.ts'
+import {
+  Duration,
+  applyDuration,
+  elapsedTime,
+  getRoundedRelativeTimeUnit,
+  roundBalancedToSingleUnit,
+  roundToSingleUnit,
+} from '../src/duration.ts'
 import {Temporal} from '@js-temporal/polyfill'
 
 suite('duration', function () {
@@ -228,94 +235,126 @@ suite('duration', function () {
     }
   })
 
-  suite('roundToSingleUnit', function () {
-    const roundTests = new Set([
-      ['PT20S', 'PT20S'],
-      ['PT31S', 'PT31S'],
+  suite('roundBalancedToSingleUnit', function () {
+    const roundTests = [
+      ['PT0S', 'PT0S'],
+      ['PT1S', 'PT1S'],
       ['PT55S', 'PT1M'],
+      ['PT57S', 'PT1M'],
+      ['PT1M', 'PT1M'],
+      ['PT1M10S', 'PT1M'],
+      ['PT1M55S', 'PT2M'],
+      ['PT54M55S', 'PT1H'],
+      ['PT55M', 'PT1H'],
+      ['PT57M', 'PT1H'],
       ['PT1H', 'PT1H'],
-      ['PT1H14M', 'PT1H'],
-      ['PT1H29M', 'PT1H'],
-      ['PT1H31M', 'PT1H'],
+      ['PT1H10M', 'PT1H'],
+      ['PT1H54M55S', 'PT1H'],
       ['PT1H55M', 'PT2H'],
-      ['PT20H', 'PT20H'],
-      ['PT21H', 'P1D'],
-      ['P1DT20H', 'P2D'],
-      ['P1DT18H', 'P2D'],
-      ['P4D', 'P4D', {relativeTo: new Date('2023-07-01T00:00:00')}],
-      ['-P4D', '-P4D', {relativeTo: new Date('2023-07-01T00:00:00')}],
-      ['P6D', 'P1W', {relativeTo: new Date('2023-07-01T00:00:00')}],
-      ['-P6D', '-P1W', {relativeTo: new Date('2023-07-01T00:00:00')}],
-      ['P2W', 'P2W', {relativeTo: new Date('2023-07-01T00:00:00')}],
-      ['-P2W', '-P2W', {relativeTo: new Date('2023-07-01T00:00:00')}],
-      ['P3W3D', 'P3W', {relativeTo: new Date('2023-07-01T00:00:00')}],
-      ['-P3W3D', '-P3W', {relativeTo: new Date('2023-07-01T00:00:00')}],
-      ['P3W6D', 'P1M', {relativeTo: new Date('2023-07-01T00:00:00')}],
-      ['-P3W6D', '-P1M', {relativeTo: new Date('2023-07-01T00:00:00')}],
-      ['P21D', 'P3W', {relativeTo: new Date('2023-07-01T00:00:00')}],
-      ['-P21D', '-P3W', {relativeTo: new Date('2023-07-01T00:00:00')}],
-      ['P24D', 'P3W', {relativeTo: new Date('2023-07-01T00:00:00')}],
-      ['-P24D', '-P3W', {relativeTo: new Date('2023-07-01T00:00:00')}],
-      ['P24DT25H', 'P1M', {relativeTo: new Date('2023-07-01T00:00:00')}],
-      ['-P24DT25H', '-P1M', {relativeTo: new Date('2023-07-01T00:00:00')}],
-      ['P25D', 'P1M', {relativeTo: new Date('2023-07-01T00:00:00')}],
-      ['-P25D', '-P1M', {relativeTo: new Date('2023-07-01T00:00:00')}],
-      ['P1M1D', 'P1M', {relativeTo: new Date('2023-07-02T00:00:00')}],
-      ['-P1M1D', '-P1M', {relativeTo: new Date('2023-07-02T00:00:00')}],
-      ['P1M1D', 'P2M', {relativeTo: new Date('2023-07-31T00:00:00')}],
-      ['-P1M1D', '-P2M', {relativeTo: new Date('2023-07-01T00:00:00')}],
-      ['P1D', 'P1D', {relativeTo: new Date('2022-01-01T00:00:00Z')}],
-      ['-P1D', '-P1D', {relativeTo: new Date('2022-01-01T00:00:00Z')}],
-      ['P8M', 'P8M', {relativeTo: new Date('2022-01-01T00:00:00Z')}],
-      ['-P8M', '-P8M', {relativeTo: new Date('2022-10-01T00:00:00Z')}],
-      ['P9M', 'P9M', {relativeTo: new Date('2022-01-01T00:00:00Z')}],
-      ['-P9M', '-P9M', {relativeTo: new Date('2022-11-01T00:00:00Z')}],
-      ['P1M', 'P1M', {relativeTo: new Date('2023-12-01T00:00:00Z')}],
-      ['-P1M', '-P1M', {relativeTo: new Date('2023-01-01T00:00:00Z')}],
-      ['P1M15D', 'P1M', {relativeTo: new Date('2023-12-01T00:00:00Z')}],
-      ['-P1M15D', '-P2M', {relativeTo: new Date('2023-01-01T00:00:00Z')}],
-      ['P1M15D', 'P2M', {relativeTo: new Date('2023-01-18T00:00:00Z')}],
-      ['-P1M15D', '-P2M', {relativeTo: new Date('2023-01-01T00:00:00Z')}],
-      ['P1M15D', 'P2M', {relativeTo: new Date('2023-01-18T00:00:00Z')}],
-      ['-P18M', '-P2Y', {relativeTo: new Date('2023-01-01T00:00:00Z')}],
-      ['P18M', 'P2Y', {relativeTo: new Date('2023-12-01T00:00:00Z')}],
-      ['-P18M', '-P1Y', {relativeTo: new Date('2023-07-01T00:00:00Z')}],
-      ['P18M', 'P2Y', {relativeTo: new Date('2023-07-01T00:00:00Z')}],
-      ['-P18M', '-P1Y', {relativeTo: new Date('2023-08-01T00:00:00Z')}],
-      ['P18M', 'P1Y', {relativeTo: new Date('2023-03-01T00:00:00Z')}],
-      [
-        '-P9M20DT25H',
-        '-P10M',
-        {
-          relativeTo: new Date('2023-11-12T00:00:00Z'),
-        },
-      ],
-      ['P9M20DT25H', 'P10M', {relativeTo: new Date('2023-01-12T00:00:00Z')}],
-      ['P11M', 'P11M', {relativeTo: new Date('2022-11-01T00:00:00Z')}],
-      ['-P11M', '-P11M', {relativeTo: new Date('2022-11-01T00:00:00Z')}],
-      ['-P11M15D', '-P1Y', {relativeTo: new Date('2024-01-06T00:00:00')}],
-      ['P1Y4D', 'P1Y', {relativeTo: new Date('2022-11-01T00:00:00Z')}],
-      ['P1Y5M13D', 'P1Y', {relativeTo: new Date('2023-01-01T00:00:00Z')}],
-      ['P1Y5M15D', 'P1Y', {relativeTo: new Date('2023-01-01T00:00:00Z')}],
-      ['P1Y5M20D', 'P1Y', {relativeTo: new Date('2023-01-01T00:00:00Z')}],
-      ['P1Y10M', 'P2Y', {relativeTo: new Date('2022-11-01T00:00:00Z')}],
-      ['-P1Y10M', '-P1Y', {relativeTo: new Date('2022-11-01T00:00:00Z')}],
-      ['P1Y10M', 'P1Y', {relativeTo: new Date('2022-01-01T00:00:00Z')}],
-      ['-P1Y10M', '-P1Y', {relativeTo: new Date('2022-12-01T00:00:00Z')}],
-      [
-        '-P1Y5M20D',
-        '-P2Y',
-        {
-          relativeTo: new Date('2022-01-01T00:00:00Z'),
-        },
-      ],
-      ['-P27D', '-P27D', {relativeTo: new Date('2023-02-28T00:00:00Z')}],
-      ['-P27D', '-P1M', {relativeTo: new Date('2023-02-27T00:00:00Z')}],
-      ['P1Y2M1D', 'P2Y', {relativeTo: new Date('2022-12-31T12:00:00.000Z')}],
-      ['-P1Y8D', '-P1Y', {relativeTo: new Date('2024-01-11T12:00:00.000Z')}],
-      ['-P1Y7DT19H43M19S', '-P1Y', {relativeTo: new Date('2024-01-11T12:00:00.000Z')}],
-      ['-P1Y11D', '-P2Y', {relativeTo: new Date('2024-01-11T12:00:00.000Z')}],
-    ])
+      ['PT20H54M55S', 'PT20H'],
+      ['PT20H55M', 'P1D'],
+      ['PT22H', 'P1D'],
+      ['P1D', 'P1D'],
+      ['P1DT10H', 'P1D'],
+      ['P1DT20H55M', 'P1D'],
+      ['P1DT21H', 'P2D'],
+      ['P5DT20H55M', 'P5D'],
+      ['P5DT21H', 'P1W'],
+      ['P6D', 'P1W'],
+      ['P7D', 'P1W'],
+      ['P12DT20H55M', 'P1W'],
+      ['P12DT21H', 'P1W'],
+      ['P13DT', 'P2W'],
+      ['P14DT', 'P2W'],
+      ['P26DT20H55M', 'P3W'],
+      ['P26DT21H', 'P3W'],
+      ['P27D', 'P1M'],
+      ['P28D', 'P1M'],
+      ['P30D', 'P1M'],
+      ['P1M', 'P1M'],
+      ['P1M27DT21H', 'P1M'],
+      ['P1M28D', 'P2M'],
+      ['P10M27DT21H', 'P10M'],
+      ['P10M28D', 'P1Y'],
+      ['P11M', 'P1Y'],
+      ['P1Y', 'P1Y'],
+      ['P1Y10M27D', 'P1Y'],
+      ['P1Y11M', 'P2Y'],
+      ['-PT1S', '-PT1S'],
+      ['-PT55S', '-PT1M'],
+      ['-PT57S', '-PT1M'],
+      ['-PT1M', '-PT1M'],
+      ['-PT1M10S', '-PT1M'],
+      ['-PT1M55S', '-PT2M'],
+      ['-PT54M55S', '-PT1H'],
+      ['-PT55M', '-PT1H'],
+      ['-PT57M', '-PT1H'],
+      ['-PT1H', '-PT1H'],
+      ['-PT1H10M', '-PT1H'],
+      ['-PT1H54M55S', '-PT1H'],
+      ['-PT1H55M', '-PT2H'],
+      ['-PT20H54M55S', '-PT20H'],
+      ['-PT20H55M', '-P1D'],
+      ['-PT22H', '-P1D'],
+      ['-P1D', '-P1D'],
+      ['-P1DT10H', '-P1D'],
+      ['-P1DT20H55M', '-P1D'],
+      ['-P1DT21H', '-P2D'],
+      ['-P5DT20H55M', '-P5D'],
+      ['-P5DT21H', '-P1W'],
+      ['-P6D', '-P1W'],
+      ['-P7D', '-P1W'],
+      ['-P12DT20H55M', '-P1W'],
+      ['-P12DT21H', '-P1W'],
+      ['-P13DT', '-P2W'],
+      ['-P14DT', '-P2W'],
+      ['-P26DT20H55M', '-P3W'],
+      ['-P26DT21H', '-P3W'],
+      ['-P27D', '-P1M'],
+      ['-P28D', '-P1M'],
+      ['-P30D', '-P1M'],
+      ['-P1M', '-P1M'],
+      ['-P1M27DT21H', '-P1M'],
+      ['-P1M28D', '-P2M'],
+      ['-P10M27DT21H', '-P10M'],
+      ['-P10M28D', '-P1Y'],
+      ['-P11M', '-P1Y'],
+      ['-P1Y', '-P1Y'],
+      ['-P1Y10M27D', '-P1Y'],
+      ['-P1Y11M', '-P2Y'],
+    ]
+    for (const [input, expected] of roundTests) {
+      test(`roundBalancedToSingleUnit(${input}) === ${expected}`, () => {
+        assert.deepEqual(roundBalancedToSingleUnit(Duration.from(input)), Duration.from(expected))
+      })
+    }
+  })
+
+  suite('roundToSingleUnit', function () {
+    const roundTests = [
+      ['PT1S', 'PT1S'],
+      ['PT58S', 'PT1M'],
+      ['PT66S', 'PT1M'],
+      ['PT5M', 'PT5M'],
+      ['PT58M', 'PT1H'],
+      ['PT66M', 'PT1H'],
+      ['PT20H55M', 'P1D'],
+      ['PT32H', 'P1D'],
+      ['P5DT21H', 'P1W'],
+      ['P6D', 'P1W'],
+      ['P16D', 'P2W'],
+      ['P20D', 'P3W'],
+      ['P27D', 'P1M'],
+      ['P45D', 'P1M'],
+      // TODO: Change this to P1M27D after integrating the new `elapsedTime` implementation.
+      ['P1M20D', 'P1M'],
+      ['P5M', 'P5M'],
+      ['P10M28D', 'P1Y'],
+      ['P18M', 'P1Y'],
+      ['P3Y', 'P3Y'],
+      ['P2M28D', 'P3M', {relativeTo: new Date('2023-07-15T00:00:00Z')}],
+      ['-P2M28D', '-P3M', {relativeTo: new Date('2023-10-15T00:00:00Z')}],
+    ]
     for (const [input, expected, opts] of roundTests) {
       test(`roundToSingleUnit(${input}) === ${expected}`, () => {
         assert.deepEqual(
@@ -333,168 +372,19 @@ suite('duration', function () {
     }
   })
 
-  suite('getRelativeTimeUnit', function () {
-    const relativeTests = new Set([
-      ['PT20S', [20, 'second']],
-      ['PT31S', [31, 'second']],
-      ['PT55S', [1, 'minute']],
-      ['PT1H', [1, 'hour']],
-      ['PT1H14M', [1, 'hour']],
-      ['PT1H29M', [1, 'hour']],
-      ['PT1H31M', [1, 'hour']],
-      ['PT1H55M', [2, 'hour']],
-      ['PT20H', [20, 'hour']],
-      ['PT21H', [1, 'day'], {relativeTo: '2023-01-15T00:00:00Z'}],
-      ['-PT21H', [-1, 'day'], {relativeTo: '2023-01-15T00:00:00Z'}],
-      ['P4D', [4, 'day'], {relativeTo: '2023-01-15T00:00:00Z'}],
-      ['-P4D', [-4, 'day'], {relativeTo: '2023-01-15T00:00:00Z'}],
-      ['P6D', [1, 'week'], {relativeTo: '2023-01-15T00:00:00Z'}],
-      ['-P6D', [-1, 'week'], {relativeTo: '2023-01-15T00:00:00Z'}],
-      ['P2W', [2, 'week'], {relativeTo: '2023-01-15T00:00:00Z'}],
-      ['-P2W', [-2, 'week'], {relativeTo: '2023-01-15T00:00:00Z'}],
-      ['P3W3D', [3, 'week'], {relativeTo: '2023-01-15T00:00:00Z'}],
-      ['-P3W3D', [-3, 'week'], {relativeTo: '2023-01-15T00:00:00Z'}],
-      ['P3W6D', [1, 'month'], {relativeTo: '2023-01-15T00:00:00Z'}],
-      ['-P3W6D', [-1, 'month'], {relativeTo: '2023-01-15T00:00:00Z'}],
-      ['P21D', [3, 'week'], {relativeTo: '2023-01-01T00:00:00Z'}],
-      ['-P21D', [-3, 'week'], {relativeTo: '2023-01-01T00:00:00Z'}],
-      ['P24D', [3, 'week'], {relativeTo: '2023-01-01T00:00:00Z'}],
-      ['-P24D', [-3, 'week'], {relativeTo: '2023-01-01T00:00:00Z'}],
-      ['P24DT25H', [1, 'month'], {relativeTo: '2023-01-15T00:00:00Z'}],
-      ['P25D', [1, 'month'], {relativeTo: '2023-01-15T00:00:00Z'}],
-      ['-P35D', [-1, 'month'], {relativeTo: '2023-02-07T22:22:57Z'}],
-      ['-P45D', [-1, 'month'], {relativeTo: '2023-02-17T22:22:57Z'}],
-      ['-P55D', [-1, 'month'], {relativeTo: '2023-02-27T22:22:57Z'}],
-      ['-P65D', [-3, 'month'], {relativeTo: '2023-02-28T22:22:57Z'}],
-      ['-P75D', [-3, 'month'], {relativeTo: '2023-03-09T22:22:57Z'}],
-      ['P1M', [1, 'month'], {relativeTo: '2024-05-31T00:00:00Z'}],
-      ['-P1M', [-1, 'month'], {relativeTo: '2024-05-31T00:00:00Z'}],
-      ['-P3M', [-3, 'month'], {relativeTo: '2023-05-30T00:00:00Z'}],
-      [
-        'P8M',
-        [8, 'month'],
-        {
-          relativeTo: new Date('2022-01-01T00:00:00Z'),
-        },
-      ],
-      [
-        '-P8M',
-        [-8, 'month'],
-        {
-          relativeTo: new Date('2022-12-01T00:00:00Z'),
-        },
-      ],
-      [
-        'P9M',
-        [9, 'month'],
-        {
-          relativeTo: new Date('2022-01-01T00:00:00Z'),
-        },
-      ],
-      [
-        '-P9M',
-        [-9, 'month'],
-        {
-          relativeTo: new Date('2022-12-01T00:00:00Z'),
-        },
-      ],
-      ['P1M1D', [1, 'month'], {relativeTo: new Date('2022-12-01T00:00:00Z')}],
-      ['P1M1D', [2, 'month'], {relativeTo: new Date('2023-01-31T00:00:00Z')}],
-      ['P1M30D', [2, 'month'], {relativeTo: new Date('2023-01-31T00:00:00Z')}],
-      [
-        'P9M20DT25H',
-        [9, 'month'],
-        {
-          relativeTo: new Date('2022-01-01T00:00:00Z'),
-        },
-      ],
-      [
-        '-P9M20DT25H',
-        [-10, 'month'],
-        {
-          relativeTo: new Date('2022-12-01T00:00:00Z'),
-        },
-      ],
-      [
-        'P9M24DT25H',
-        [9, 'month'],
-        {
-          relativeTo: new Date('2022-01-01T00:00:00Z'),
-        },
-      ],
-      [
-        '-P9M24DT25H',
-        [-10, 'month'],
-        {
-          relativeTo: new Date('2022-12-01T00:00:00Z'),
-        },
-      ],
-      ['P11M', [11, 'month']],
-      ['P1Y4D', [1, 'year']],
-      [
-        'P1Y5M13D',
-        [1, 'year'],
-        {
-          relativeTo: new Date('2022-01-01T00:00:00Z'),
-        },
-      ],
-      [
-        '-P1Y5M13D',
-        [-1, 'year'],
-        {
-          relativeTo: new Date('2022-12-01T00:00:00Z'),
-        },
-      ],
-      [
-        'P1Y5M15D',
-        [1, 'year'],
-        {
-          relativeTo: new Date('2022-01-01T00:00:00Z'),
-        },
-      ],
-      [
-        '-P1Y5M15D',
-        [-1, 'year'],
-        {
-          relativeTo: new Date('2022-12-01T00:00:00Z'),
-        },
-      ],
-      [
-        'P1Y5M20D',
-        [2, 'year'],
-        {
-          relativeTo: new Date('2022-12-01T00:00:00Z'),
-        },
-      ],
-      [
-        '-P1Y5M20D',
-        [-2, 'year'],
-        {
-          relativeTo: new Date('2022-01-01T00:00:00Z'),
-        },
-      ],
-      ['P1Y10M', [2, 'year'], {relativeTo: new Date('2022-12-01T00:00:00Z')}],
-      [
-        '-P1Y10M',
-        [-2, 'year'],
-        {
-          relativeTo: new Date('2022-10-01T00:00:00Z'),
-        },
-      ],
-    ])
-    for (const [input, [val, unit], opts] of relativeTests) {
-      test(`getRelativeTimeUnit(${input}${opts ? `, ${JSON.stringify(opts)}` : ''}) === [${val}, ${unit}]`, () => {
-        assert.deepEqual(
-          getRelativeTimeUnit(Duration.from(input), opts || {relativeTo: new Date('2023-07-01T00:00:00')}),
-          [val, unit],
-        )
-      })
-      if (opts?.relativeTo) continue
-      test(`getRelativeTimeUnit(-${input}${opts ? `, ${JSON.stringify(opts)}` : ''}) === [-${val}, ${unit}]`, () => {
-        assert.deepEqual(
-          getRelativeTimeUnit(Duration.from(`-${input}`), opts || {relativeTo: new Date('2023-07-01T00:00:00')}),
-          [-val, unit],
-        )
+  suite('getRoundedRelativeTimeUnit', function () {
+    const relativeTests = [
+      ['PT1S', [1, 'second']],
+      ['PT2M', [2, 'minute']],
+      ['PT3H', [3, 'hour']],
+      ['P4D', [4, 'day']],
+      ['P3W', [3, 'week']],
+      ['P2M', [2, 'month']],
+      ['P1Y', [1, 'year']],
+    ]
+    for (const [input, [val, unit]] of relativeTests) {
+      test(`getRoundedRelativeTimeUnit(${input}) === [${val}, ${unit}]`, () => {
+        assert.deepEqual(getRoundedRelativeTimeUnit(Duration.from(input)), [val, unit])
       })
     }
   })
