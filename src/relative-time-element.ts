@@ -1,12 +1,4 @@
-import {
-  Duration,
-  Unit,
-  elapsedTime,
-  getRoundedRelativeTimeUnit,
-  isDuration,
-  roundToSingleUnit,
-  unitNames,
-} from './duration.js'
+import {Duration, Unit, elapsedTime, getRelativeTimeUnit, isDuration, roundToSingleUnit, unitNames} from './duration.js'
 const HTMLElement = globalThis.HTMLElement || (null as unknown as typeof window['HTMLElement'])
 
 export type DeprecatedFormat = 'auto' | 'micro' | 'elapsed'
@@ -189,7 +181,7 @@ export class RelativeTimeElement extends HTMLElement implements Intl.DateTimeFor
     const tense = this.tense
     if (tense === 'future' && duration.sign !== 1) duration = emptyDuration
     if (tense === 'past' && duration.sign !== -1) duration = emptyDuration
-    const [int, unit] = getRoundedRelativeTimeUnit(roundToSingleUnit(duration))
+    const [int, unit] = getRelativeTimeUnit(duration)
     if (unit === 'second' && int < 10) {
       return relativeFormat.format(0, this.precision === 'millisecond' ? 'second' : this.precision)
     }

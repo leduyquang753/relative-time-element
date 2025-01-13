@@ -134,10 +134,11 @@ interface RoundingOpts {
 }
 
 export function roundToSingleUnit(duration: Duration, {relativeTo = Date.now()}: Partial<RoundingOpts> = {}): Duration {
+  if (duration.blank) return duration
   const referenceDate = new Date(relativeTo)
-  const specifiedDate = applyDuration(referenceDate, duration);
-  const [sign, subtrahend, minuend]
-    = specifiedDate < referenceDate ? [-1, referenceDate, specifiedDate] : [1, specifiedDate, referenceDate];
+  const specifiedDate = applyDuration(referenceDate, duration)
+  const [sign, subtrahend, minuend] =
+    specifiedDate < referenceDate ? [-1, referenceDate, specifiedDate] : [1, specifiedDate, referenceDate]
   const subtrahendWithoutTime = new Date(subtrahend)
   subtrahendWithoutTime.setHours(0)
   subtrahendWithoutTime.setMinutes(0)
@@ -150,7 +151,7 @@ export function roundToSingleUnit(duration: Duration, {relativeTo = Date.now()}:
   minuendWithoutTime.setMilliseconds(0)
   if (
     subtrahendWithoutTime.getTime() === minuendWithoutTime.getTime() ||
-      subtrahend.getTime() - minuend.getTime() < 1000 * 60 * 60 * 12
+    subtrahend.getTime() - minuend.getTime() < 1000 * 60 * 60 * 12
   ) {
     const difference = Math.round((subtrahend.getTime() - minuend.getTime()) / 1000)
     let hours = Math.floor(difference / 3600)
@@ -172,7 +173,8 @@ export function roundToSingleUnit(duration: Duration, {relativeTo = Date.now()}:
     }
   }
   const days = Math.round((subtrahendWithoutTime.getTime() - minuendWithoutTime.getTime()) / (1000 * 60 * 60 * 24))
-  const months = (subtrahend.getFullYear() * 12 + subtrahend.getMonth()) - (minuend.getFullYear() * 12 + minuend.getMonth())
+  const months =
+    subtrahend.getFullYear() * 12 + subtrahend.getMonth() - (minuend.getFullYear() * 12 + minuend.getMonth())
   if (months === 0 || days <= 26) {
     if (days >= 6) {
       return new Duration(0, 0, Math.floor((days + 1) / 7) * sign) // Weeks.
