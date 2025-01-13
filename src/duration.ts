@@ -134,53 +134,64 @@ interface RoundingOpts {
 }
 
 export function roundToSingleUnit(duration: Duration, {relativeTo = Date.now()}: Partial<RoundingOpts> = {}): Duration {
-  return roundBalancedToSingleUnit(
-    // TODO: Remove the positive sign in `+relativeTo` after integrating the new `elapsedTime` implementation.
-    elapsedTime(applyDuration(new Date(relativeTo), duration), 'millisecond', +relativeTo),
-  )
-}
-
-export function roundBalancedToSingleUnit(duration: Duration): Duration {
-  if (duration.blank) return duration
-  const sign = duration.sign
-  const values = [
-    Math.abs(duration.years),
-    Math.abs(duration.months),
-    Math.abs(duration.days),
-    Math.abs(duration.hours),
-    Math.abs(duration.minutes),
-    Math.abs(duration.seconds),
-    Math.abs(duration.milliseconds),
-  ]
-  let biggestUnitIndex = values.findIndex(v => v > 0)
-  const roundedLowerUnit =
-    biggestUnitIndex < values.length - 1 &&
-    values[biggestUnitIndex + 1] >= durationRoundingThresholds[biggestUnitIndex + 1]
-  if (roundedLowerUnit) {
-    values[biggestUnitIndex] += 1
-  }
-  if (values[biggestUnitIndex] >= durationRoundingThresholds[biggestUnitIndex]) {
-    --biggestUnitIndex
-    values[biggestUnitIndex] = 1
-  }
-  for (let i = biggestUnitIndex + 1; i < values.length; ++i) {
-    values[i] = 0
-  }
-  if (biggestUnitIndex === 2 && values[2] >= 6) {
-    const weeks = Math.max(1, Math.floor((values[2] + (roundedLowerUnit ? 0 : 1)) / 7))
-    if (weeks < 4) {
-      return new Duration(0, 0, weeks * sign)
+  const referenceDate = new Date(relativeTo)
+  const specifiedDate = applyDuration(referenceDate, duration);
+  const [sign, subtrahend, minuend]
+    = specifiedDate < referenceDate ? [-1, referenceDate, specifiedDate] : [1, specifiedDate, referenceDate];
+  const subtrahendWithoutTime = new Date(subtrahend)
+  subtrahendWithoutTime.setHours(0)
+  subtrahendWithoutTime.setMinutes(0)
+  subtrahendWithoutTime.setSeconds(0)
+  subtrahendWithoutTime.setMilliseconds(0)
+  const minuendWithoutTime = new Date(minuend)
+  minuendWithoutTime.setHours(0)
+  minuendWithoutTime.setMinutes(0)
+  minuendWithoutTime.setSeconds(0)
+  minuendWithoutTime.setMilliseconds(0)
+  if (
+    subtrahendWithoutTime.getTime() === minuendWithoutTime.getTime() ||
+      subtrahend.getTime() - minuend.getTime() < 1000 * 60 * 60 * 12
+  ) {
+    const difference = Math.round((subtrahend.getTime() - minuend.getTime()) / 1000)
+    let hours = Math.floor(difference / 3600)
+    let minutes = Math.floor((difference % 3600) / 60)
+    const seconds = Math.floor(difference % 60)
+    if (hours === 0) {
+      if (seconds >= durationRoundingThresholds[5]) minutes += 1
+      if (minutes >= durationRoundingThresholds[4]) {
+        return new Duration(0, 0, 0, 0, 1 * sign) // 1 hour.
+      }
+      if (minutes === 0) {
+        return new Duration(0, 0, 0, 0, 0, 0, seconds * sign)
+      } else {
+        return new Duration(0, 0, 0, 0, 0, minutes * sign)
+      }
+    } else {
+      if (hours < 23 && minutes >= durationRoundingThresholds[4]) hours += 1
+      return new Duration(0, 0, 0, 0, hours * sign)
     }
-    values[biggestUnitIndex] = 0
-    --biggestUnitIndex
-    values[biggestUnitIndex] = 1
   }
-  values[biggestUnitIndex] *= sign
-  values.splice(2, 0, 0)
-  return new Duration(...values)
+  const days = Math.round((subtrahendWithoutTime.getTime() - minuendWithoutTime.getTime()) / (1000 * 60 * 60 * 24))
+  const months = (subtrahend.getFullYear() * 12 + subtrahend.getMonth()) - (minuend.getFullYear() * 12 + minuend.getMonth())
+  if (months === 0 || days <= 26) {
+    if (days >= 6) {
+      return new Duration(0, 0, Math.floor((days + 1) / 7) * sign) // Weeks.
+    } else {
+      return new Duration(0, 0, 0, days * sign)
+    }
+  }
+  if (months < 12) {
+    return new Duration(0, months * sign)
+  } else {
+    return new Duration((subtrahend.getFullYear() - minuend.getFullYear()) * sign)
+  }
 }
 
-export function getRoundedRelativeTimeUnit(rounded: Duration): [number, Intl.RelativeTimeFormatUnit] {
+export function getRelativeTimeUnit(
+  duration: Duration,
+  opts?: Partial<RoundingOpts>,
+): [number, Intl.RelativeTimeFormatUnit] {
+  const rounded = roundToSingleUnit(duration, opts)
   if (rounded.blank) return [0, 'second']
   for (const unit of unitNames) {
     if (unit === 'millisecond') continue
